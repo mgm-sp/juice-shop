@@ -1,0 +1,8 @@
+---
+:description: |
+  Perform a reflected XSS attack which raises an alert box with the string "XSS1".
+:category: "XSS"
+:name: "Reflected XSS Tier 1"
+:value: 10
+:solutions:
+  - '<script>alert("XSS1")</script>'
