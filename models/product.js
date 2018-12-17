@@ -2,34 +2,25 @@
 const utils = require('../lib/utils')
 const challenges = require('../data/datacache').challenges
 
-module.exports = (sequelize, DataTypes) => {
+module.exports = (sequelize, { STRING, DECIMAL }) => {
   const Product = sequelize.define('Product', {
-    name: DataTypes.STRING,
-    description: DataTypes.STRING,
-    price: DataTypes.DECIMAL,
-    image: DataTypes.STRING
-  }, {
-    paranoid: true,
-    classMethods: {
-      associate: function (models) {
-        Product.hasMany(models.Basket, {through: models.BasketItem})
-      }},
-
-    hooks: {
-      beforeCreate: function (product, fn) {
-        xssChallengeProductHook(product)
-        fn(null, product)
-      },
-      beforeUpdate: function (product, fn) {
-        xssChallengeProductHook(product)
-        fn(null, product)
+    name: STRING,
+    description: {
+      type: STRING,
+      set (description) {
+        if (utils.notSolved(challenges.restfulXssChallenge) && utils.contains(description, '<iframe src="javascript:alert(`xss`)">')) {
+          utils.solve(challenges.restfulXssChallenge)
+        }
+        this.setDataValue('description', description)
       }
-    }})
-  return Product
-}
+    },
+    price: DECIMAL,
+    image: STRING
+  }, { paranoid: true })
 
-function xssChallengeProductHook (product) {
-  if (utils.notSolved(challenges.restfulXssChallenge) && utils.contains(product.description, '<script>alert("XSS3")</script>')) {
-    utils.solve(challenges.restfulXssChallenge)
+  Product.associate = ({ Basket, BasketItem }) => {
+    Product.belongsToMany(Basket, { through: BasketItem })
   }
+
+  return Product
 }

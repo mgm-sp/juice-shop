@@ -5,13 +5,22 @@ engines:
     enabled: true
   fixme:
     enabled: true
-
 ratings:
-   paths:
-   - "**.js"
-   - "**.css"
-
+  paths:
+    - '**.ts'
+    - '**.js'
+    - '**.css'
+    - '**.scss'
+checks:
+  method-complexity:
+    config:
+      threshold: 7
+  similar-code:
+    enabled: false
+  identical-code:
+    enabled: false
 exclude_paths:
-- "app/private/**/*"
-- "app/css/geo-bootstrap/**/*"
-- "data/datacreator.js"
+  - 'data/datacreator.js'
+  - 'frontend/src/assets/private/**/*'
+  - 'Gruntfile.js'
+  - '**/*conf.js'

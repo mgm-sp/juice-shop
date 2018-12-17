@@ -1,27 +1,27 @@
 const insecurity = require('../lib/insecurity')
 const models = require('../models/index')
 
-exports = module.exports = function applyCoupon () {
-  return (req, res, next) => {
-    const id = req.params.id
-    let coupon = req.params.coupon ? decodeURIComponent(req.params.coupon) : undefined
+module.exports = function applyCoupon () {
+  return ({ params }, res, next) => {
+    const id = params.id
+    let coupon = params.coupon ? decodeURIComponent(params.coupon) : undefined
     const discount = insecurity.discountFromCoupon(coupon)
     coupon = discount ? coupon : null
-    models.Basket.find(id).success(basket => {
+    models.Basket.findByPk(id).then(basket => {
       if (basket) {
-        basket.updateAttributes({ coupon: coupon }).success(() => {
+        basket.updateAttributes({ coupon }).then(() => {
           if (discount) {
-            res.json({ discount: discount })
+            res.json({ discount })
           } else {
             res.status(404).send('Invalid coupon.')
           }
-        }).error(error => {
+        }).catch(error => {
           next(error)
         })
       } else {
         next(new Error('Basket with id=' + id + ' does not exist.'))
       }
-    }).error(error => {
+    }).catch(error => {
       next(error)
     })
   }

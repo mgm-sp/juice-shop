@@ -2,6 +2,7 @@ const frisby = require('frisby')
 const Joi = frisby.Joi
 const insecurity = require('../../lib/insecurity')
 const http = require('http')
+const config = require('config')
 
 const REST_URL = 'http://localhost:3000/rest'
 
@@ -15,22 +16,22 @@ describe('/rest/product/:id/reviews', () => {
     author: Joi.string()
   }
 
-  it('GET product reviews by product id', done => {
-    frisby.get(REST_URL + '/product/1/reviews')
+  it('GET product reviews by product id', () => {
+    return frisby.get(REST_URL + '/product/1/reviews')
       .expect('status', 200)
       .expect('header', 'content-type', /application\/json/)
-      .expect('jsonTypes', reviewResponseSchema).done(done)
+      .expect('jsonTypes', reviewResponseSchema)
   })
 
-  it('GET product reviews attack by injecting a mongoDB sleep command', done => {
-    frisby.get(REST_URL + '/product/sleep(1)/reviews')
+  it('GET product reviews attack by injecting a mongoDB sleep command', () => {
+    return frisby.get(REST_URL + '/product/sleep(1)/reviews')
       .expect('status', 200)
       .expect('header', 'content-type', /application\/json/)
-      .expect('jsonTypes', reviewResponseSchema).done(done)
+      .expect('jsonTypes', reviewResponseSchema)
   })
 
-  it('PUT single product review can be created', done => {
-    frisby.put(REST_URL + '/product/1/reviews', {
+  it('PUT single product review can be created', () => {
+    return frisby.put(REST_URL + '/product/1/reviews', {
       body: {
         message: 'Lorem Ipsum',
         author: 'Anonymous'
@@ -38,7 +39,6 @@ describe('/rest/product/:id/reviews', () => {
     })
       .expect('status', 201)
       .expect('header', 'content-type', /application\/json/)
-      .done(done)
   })
 })
 
@@ -67,8 +67,8 @@ describe('/rest/product/reviews', () => {
     })
   })
 
-  it('PATCH single product review can be edited', done => {
-    frisby.patch(REST_URL + '/product/reviews', {
+  it('PATCH single product review can be edited', () => {
+    return frisby.patch(REST_URL + '/product/reviews', {
       headers: authHeader,
       body: {
         id: reviewId,
@@ -78,22 +78,33 @@ describe('/rest/product/reviews', () => {
       .expect('status', 200)
       .expect('header', 'content-type', /application\/json/)
       .expect('jsonTypes', updatedReviewResponseSchema)
-      .done(done)
   })
 
-  it('PATCH single product review editing need an authenticated user', done => {
-    frisby.patch(REST_URL + '/product/reviews', {
+  it('PATCH single product review editing need an authenticated user', () => {
+    return frisby.patch(REST_URL + '/product/reviews', {
       body: {
         id: reviewId,
         message: 'Lorem Ipsum'
       }
     })
       .expect('status', 401)
-      .done(done)
   })
 
-  it('PATCH multiple product review via injection', done => {
-    frisby.patch(REST_URL + '/product/reviews', {
+  it('POST single product review can be liked', () => {
+    return frisby.patch(REST_URL + '/product/reviews', {
+      headers: authHeader,
+      body: {
+        id: reviewId
+      }
+    })
+      .expect('status', 200)
+  })
+
+  it('PATCH multiple product review via injection', () => {
+    // Count all the reviews. (Count starts at one because of the review inserted by the other tests...)
+    const totalReviews = config.get('products').reduce((sum, { reviews = [] }) => sum + reviews.length, 1)
+
+    return frisby.patch(REST_URL + '/product/reviews', {
       headers: authHeader,
       body: {
         id: { '$ne': -1 },
@@ -103,8 +114,6 @@ describe('/rest/product/reviews', () => {
       .expect('status', 200)
       .expect('header', 'content-type', /application\/json/)
       .expect('jsonTypes', updatedReviewResponseSchema)
-      .expect('json', {
-        modified: 6
-      }).done(done)
+      .expect('json', { modified: totalReviews })
   })
 })

@@ -1,24 +1,24 @@
 const models = require('../models/index')
 
-exports = module.exports = function securityQuestion () {
-  return (req, res, next) => {
-    const email = req.query.email
+module.exports = function securityQuestion () {
+  return ({ query }, res, next) => {
+    const email = query.email
     models.SecurityAnswer.find({
       include: [{
         model: models.User,
-        where: { email: email }
+        where: { email }
       }]
-    }).success(answer => {
+    }).then(answer => {
       if (answer) {
-        models.SecurityQuestion.find(answer.SecurityQuestionId).success(question => {
-          res.json({ question: question })
-        }).error(error => {
+        models.SecurityQuestion.findByPk(answer.SecurityQuestionId).then(question => {
+          res.json({ question })
+        }).catch(error => {
           next(error)
         })
       } else {
         res.json({})
       }
-    }).error(error => {
+    }).catch(error => {
       next(error)
     })
   }

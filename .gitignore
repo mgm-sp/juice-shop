@@ -1,91 +1,47 @@
-*.log
-*.out
-build/
-.stryker-tmp/
-.nyc_output/
-vagrant/.vagrant/
-juiceshop.sqlite
-
-# Intellij
-.idea/
-*.iml
-*.iws
-*.eml
-out/
-
-# VIM swap files
-*.swp
-
-# Orig from merges
-*.orig
-
-# NPM
+# App
 node_modules/
-npm-debug.log.*
+juiceshop.sqlite
+order_*.pdf
+app/
+!frontend/src/app
+uploads/complaints/*.*
+!uploads/complaints/.gitkeep
+ftp/legal.md
+
+# Build
+.nyc_output/
+.sass-cache/
+build/
+dist/
+logs/
+vagrant/.vagrant/
+*.orig
+*.out
+*.log
 package-lock.json
 
-# Bower
-app/bower_components/
+# IDEs
+.idea/
+.vscode/
+out/
+*.eml
+*.iml
+*.iws
+*.swp
 
-# App
-dist/
-order_*.pdf
-ftp/uploads/
+# Branch ghpages
 assets/
-app/index.html
-
-# Favicons downloaded during customizazion
-app/public/*.*
-!app/public/favicon_ctf.ico
-!app/public/favicon_v2.ico
-
-# Logos downloaded during customizazion
-app/public/images/*.*
-!app/public/images/JuiceShop*.*
-
-# Product images downloaded during customizazion
-app/public/images/products/*.*
-!app/public/images/products/apple_juice.jpg
-!app/public/images/products/artwork.jpg
-!app/public/images/products/apple_pressings.jpg
-!app/public/images/products/banana_juice.jpg
-!app/public/images/products/ctf_sticker.png
-!app/public/images/products/eggfruit_juice.jpg
-!app/public/images/products/fan_girlie.jpg
-!app/public/images/products/fan_hoodie.jpg
-!app/public/images/products/fan_mug.jpg
-!app/public/images/products/fan_shirt.jpg
-!app/public/images/products/fruit_press.jpg
-!app/public/images/products/green_smoothie.jpg
-!app/public/images/products/lemon_juice.jpg
-!app/public/images/products/orange_juice.jpg
-!app/public/images/products/owasp_osaft.jpg
-!app/public/images/products/owasplogo.png
-!app/public/images/products/quince.jpg
-!app/public/images/products/raspberry_juice.jpg
-!app/public/images/products/sticker.png
-!app/public/images/products/sticker_facelift.png
-!app/public/images/products/undefined.png
-!app/public/images/products/white_raffards.jpg
-!app/public/images/products/woodruff_syrup.jpg
-!app/public/images/products/carrot_juice.jpeg
-!app/public/images/products/strawberry_juice.jpeg
-!app/public/images/products/melon_bike.jpeg
-!app/public/images/products/3d_keychain.jpg
-!app/public/images/products/waspy.png
-!app/public/images/products/jawa_script.jpg
-!app/public/images/products/thingie1.jpg
-!app/public/images/products/Wooden-crutch.jpg
-!app/public/images/products/JuiceShop.stl
-!app/public/images/products/squareBox1-40x40x40.stl
-!app/public/images/products/crutch.123dx
-!app/public/images/products/stickersheet_se.png
+!frontend/src/assets/
 
 # Custom configuration files
 config/*.yml
 !config/bodgeit.yml
 !config/ctf.yml
+!config/fbctf.yml
 !config/default.yml
 !config/sickshop.yml
 !config/juicebox.yml
 !config/quiet.yml
+!config/test.yml
+!config/7ms.yml
+!config/mozilla.yml

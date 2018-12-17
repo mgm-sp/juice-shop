@@ -1,21 +1,26 @@
-const applicationRoot = __dirname.replace(/\\/g, '/')
 const path = require('path')
 const fs = require('fs-extra')
-const glob = require('glob')
 const morgan = require('morgan')
 const colors = require('colors/safe')
-const restful = require('sequelize-restful')
+const epilogue = require('epilogue-js')
 const express = require('express')
 const helmet = require('helmet')
 const errorhandler = require('errorhandler')
 const cookieParser = require('cookie-parser')
 const serveIndex = require('serve-index')
-const favicon = require('serve-favicon')
 const bodyParser = require('body-parser')
 const cors = require('cors')
+const securityTxt = require('express-security.txt')
+const robots = require('express-robots-txt')
 const multer = require('multer')
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 200000 } })
+const yaml = require('js-yaml')
+const swaggerUi = require('swagger-ui-express')
+const RateLimit = require('express-rate-limit')
+const swaggerDocument = yaml.load(fs.readFileSync('./swagger.yml', 'utf8'))
 const fileUpload = require('./routes/fileUpload')
+const profileImageFileUpload = require('./routes/profileImageFileUpload')
+const profileImageUrlUpload = require('./routes/profileImageUrlUpload')
 const redirect = require('./routes/redirect')
 const angular = require('./routes/angular')
 const easterEgg = require('./routes/easterEgg')
@@ -37,36 +42,40 @@ const coupon = require('./routes/coupon')
 const basket = require('./routes/basket')
 const order = require('./routes/order')
 const verify = require('./routes/verify')
+const b2bOrder = require('./routes/b2bOrder')
+const showProductReviews = require('./routes/showProductReviews')
+const createProductReviews = require('./routes/createProductReviews')
+const updateProductReviews = require('./routes/updateProductReviews')
+const likeProductReviews = require('./routes/likeProductReviews')
 const utils = require('./lib/utils')
 const insecurity = require('./lib/insecurity')
 const models = require('./models')
 const datacreator = require('./data/datacreator')
-const notifications = require('./data/datacache').notifications
 const app = express()
 const server = require('http').Server(app)
-const io = require('socket.io')(server)
-const replace = require('replace')
 const appConfiguration = require('./routes/appConfiguration')
+const captcha = require('./routes/captcha')
+const trackOrder = require('./routes/trackOrder')
+const countryMapping = require('./routes/countryMapping')
+const basketItems = require('./routes/basketItems')
+const saveLoginIp = require('./routes/saveLoginIp')
+const userProfile = require('./routes/userProfile')
+const updateUserProfile = require('./routes/updateUserProfile')
 const config = require('config')
-let firstConnectedSocket = null
 
-global.io = io
-errorhandler.title = 'Juice Shop (Express ' + utils.version('express') + ')'
+errorhandler.title = `${config.get('application.name')} (Express ${utils.version('express')})`
 
-/* Delete old order PDFs */
-glob(path.join(__dirname, 'ftp/*.pdf'), (err, files) => {
-  if (err) {
-    console.log(err)
-  } else {
-    files.forEach(filename => {
-      fs.remove(filename)
-    })
-  }
-})
+require('./lib/startup/validatePreconditions')()
+require('./lib/startup/validateConfig')()
+require('./lib/startup/cleanupFtpFolder')()
+require('./lib/startup/restoreOriginalLegalInformation')()
 
-const showProductReviews = require('./routes/showProductReviews')
-const createProductReviews = require('./routes/createProductReviews')
-const updateProductReviews = require('./routes/updateProductReviews')
+/* Locals */
+app.locals.captchaId = 0
+app.locals.captchaReqId = 1
+app.locals.captchaBypassReqTimes = []
+app.locals.abused_ssti_bug = false
+app.locals.abused_ssrf_bug = false
 
 /* Bludgeon solution for possible CORS problems: Allow everything! */
 app.options('*', cors())
@@ -83,22 +92,24 @@ app.use((req, res, next) => {
   next()
 })
 
-/* Favicon */
-let icon = 'favicon_v2.ico'
-if (config.get('application.favicon')) {
-  icon = config.get('application.favicon')
-  if (utils.startsWith(icon, 'http')) {
-    const iconPath = icon
-    icon = decodeURIComponent(icon.substring(icon.lastIndexOf('/') + 1))
-    utils.downloadToFile(iconPath, 'app/public/' + icon)
-  }
-}
-app.use(favicon(path.join(__dirname, 'app/public/' + icon)))
+/* Security Policy */
+app.get('/security.txt', verify.accessControlChallenges())
+app.use('/security.txt', securityTxt({
+  contact: config.get('application.securityTxt.contact'),
+  encryption: config.get('application.securityTxt.encryption'),
+  acknowledgements: config.get('application.securityTxt.acknowledgements')
+}))
 
-/* Checks for solved challenges */
-app.use('/public/images/tracking', verify.accessControlChallenges())
-app.use('/public/images/products', verify.accessControlChallenges())
-app.use('/i18n', verify.accessControlChallenges())
+/* robots.txt */
+app.use(robots({ UserAgent: '*', Disallow: '/ftp' }))
+
+/* Checks for challenges solved by retrieving a file implicitly or explicitly */
+app.use('/assets/public/images/tracking', verify.accessControlChallenges())
+app.use('/assets/public/images/products', verify.accessControlChallenges())
+app.use('/assets/i18n', verify.accessControlChallenges())
+
+/* Checks for challenges solved by abusing SSTi and SSRF bugs */
+app.use('/solve/challenges/server-side', verify.serverSideChallenges())
 
 /* /ftp directory browsing and file download */
 app.use('/ftp', serveIndex('ftp', { 'icons': true }))
@@ -108,14 +119,41 @@ app.use('/ftp/:file', fileServer())
 app.use('/encryptionkeys', serveIndex('encryptionkeys', { 'icons': true, 'view': 'details' }))
 app.use('/encryptionkeys/:file', keyServer())
 
-app.use(express.static(applicationRoot + '/app'))
+/* Swagger documentation for B2B v2 endpoints */
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument))
+
+// app.use(express.static(applicationRoot + '/app'))
+app.use(express.static(path.join(__dirname, '/frontend/dist/frontend')))
+
 app.use(cookieParser('kekse'))
-app.use(bodyParser.json())
 
+app.use(bodyParser.urlencoded({ extended: true }))
+/* File Upload */
+app.post('/file-upload', upload.single('file'), fileUpload())
+app.post('/profile/image/file', upload.single('file'), profileImageFileUpload())
+app.post('/profile/image/url', upload.single('file'), profileImageUrlUpload())
+
+app.use(bodyParser.text({ type: '*/*' }))
+app.use(function jsonParser (req, res, next) {
+  req.rawBody = req.body
+  if (req.headers['content-type'] !== undefined && req.headers['content-type'].indexOf('application/json') > -1) {
+    if (req.body && req.body !== Object(req.body)) { // TODO Expensive workaround for 500 errors during Frisby test run (see #640)
+      req.body = JSON.parse(req.body)
+    }
+  }
+  next()
+})
 /* HTTP request logging */
-app.use(morgan('dev'))
+let accessLogStream = require('file-stream-rotator').getStream({ filename: './logs/access.log', frequency: 'daily', verbose: false, max_logs: '2d' })
+app.use(morgan('combined', { stream: accessLogStream }))
 
-/* Authorization */
+/* Rate limiting */
+app.enable('trust proxy')
+app.use('/rest/user/reset-password', new RateLimit({ windowMs: 5 * 60 * 1000, max: 100, keyGenerator ({ headers, ip }) { return headers['X-Forwarded-For'] || ip }, delayMs: 0 }))
+
+/** Authorization **/
+/* Checks on JWT in Authorization header */
+app.use(verify.jwtChallenges())
 /* Baskets: Unauthorized users are not allowed to access baskets */
 app.use('/rest/basket', insecurity.isAuthorized())
 /* BasketItems: API only accessible for authenticated users */
@@ -123,7 +161,7 @@ app.use('/api/BasketItems', insecurity.isAuthorized())
 app.use('/api/BasketItems/:id', insecurity.isAuthorized())
 /* Feedbacks: GET allowed for feedback carousel, POST allowed in order to provide feedback without being logged in */
 app.use('/api/Feedbacks/:id', insecurity.isAuthorized())
-/* Users: Only POST is allowed in order to register a new uer */
+/* Users: Only POST is allowed in order to register a new user */
 app.get('/api/Users', insecurity.isAuthorized())
 app.route('/api/Users/:id')
   .get(insecurity.isAuthorized())
@@ -154,23 +192,43 @@ app.use('/api/SecurityAnswers/:id', insecurity.denyAll())
 app.use('/rest/user/authentication-details', insecurity.isAuthorized())
 app.use('/rest/basket/:id', insecurity.isAuthorized())
 app.use('/rest/basket/:id/order', insecurity.isAuthorized())
-
-/* Challenge evaluation before sequelize-restful takes over */
+/* Challenge evaluation before epilogue takes over */
 app.post('/api/Feedbacks', verify.forgedFeedbackChallenge())
+/* Captcha verification before epilogue takes over */
+app.post('/api/Feedbacks', captcha.verifyCaptcha())
+/* Captcha Bypass challenge verification */
+app.post('/api/Feedbacks', verify.captchaBypassChallenge())
+/* Register admin challenge verification */
+app.post('/api/Users', verify.registerAdminChallenge())
+/* Unauthorized users are not allowed to access B2B API */
+app.use('/b2b/v2', insecurity.isAuthorized())
+/* Add item to basket */
+app.post('/api/BasketItems', basketItems())
 
-/* Verifying DB related challenges can be postponed until the next request for challenges is coming via sequelize-restful */
+/* Verifying DB related challenges can be postponed until the next request for challenges is coming via epilogue */
 app.use(verify.databaseRelatedChallenges())
 
-// routes for the NoSql parts of the application
-app.get('/rest/product/:id/reviews', showProductReviews())
-app.put('/rest/product/:id/reviews', createProductReviews())
-app.patch('/rest/product/reviews', insecurity.isAuthorized(), updateProductReviews())
+/* Generated API endpoints */
+epilogue.initialize({ app, sequelize: models.sequelize })
 
-/* Sequelize Restful APIs */
-app.use(restful(models.sequelize, {
-  endpoint: '/api',
-  allowed: ['Users', 'Products', 'Feedbacks', 'BasketItems', 'Challenges', 'Complaints', 'Recycles', 'SecurityQuestions', 'SecurityAnswers']
-}))
+const autoModels = ['User', 'Product', 'Feedback', 'BasketItem', 'Challenge', 'Complaint', 'Recycle', 'SecurityQuestion', 'SecurityAnswer']
+
+for (const modelName of autoModels) {
+  const resource = epilogue.resource({
+    model: models[modelName],
+    endpoints: [`/api/${modelName}s`, `/api/${modelName}s/:id`]
+  })
+
+  // fix the api difference between epilogue and previously used sequlize-restful
+  resource.all.send.before((req, res, context) => {
+    context.instance = {
+      status: 'success',
+      data: context.instance
+    }
+    return context.continue
+  })
+}
+
 /* Custom Restful API */
 app.post('/rest/user/login', login())
 app.get('/rest/user/change-password', changePassword())
@@ -189,89 +247,55 @@ app.get('/rest/continue-code', continueCode())
 app.put('/rest/continue-code/apply/:continueCode', restoreProgress())
 app.get('/rest/admin/application-version', appVersion())
 app.get('/redirect', redirect())
-/* File Upload */
-app.post('/file-upload', upload.single('file'), fileUpload())
+app.get('/rest/captcha', captcha())
+app.get('/rest/track-order/:id', trackOrder())
+app.get('/rest/country-mapping', countryMapping())
+app.get('/rest/saveLoginIp', saveLoginIp())
+
+/* NoSQL API endpoints */
+app.get('/rest/product/:id/reviews', showProductReviews())
+app.put('/rest/product/:id/reviews', createProductReviews())
+app.patch('/rest/product/reviews', insecurity.isAuthorized(), updateProductReviews())
+app.post('/rest/product/reviews', insecurity.isAuthorized(), likeProductReviews())
+
+/* B2B Order API */
+app.post('/b2b/v2/orders', b2bOrder())
+
 /* File Serving */
 app.get('/the/devs/are/so/funny/they/hid/an/easter/egg/within/the/easter/egg', easterEgg())
 app.get('/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us', premiumReward())
+
+/* Routes for profile page */
+app.get('/profile', userProfile())
+app.post('/profile', updateUserProfile())
+
 app.use(angular())
+
 /* Error Handling */
 app.use(verify.errorHandlingChallenge())
 app.use(errorhandler())
 
-exports.start = function (readyCallback) {
-  function registerWebsocketEvents () {
-    io.on('connection', socket => {
-      // notify only first client to connect about server start
-      if (firstConnectedSocket === null) {
-        socket.emit('server started')
-        firstConnectedSocket = socket.id
-      }
+exports.start = async function (readyCallback) {
+  await models.sequelize.sync({ force: true })
+  await datacreator()
 
-      // send all outstanding notifications on (re)connect
-      notifications.forEach(notification => {
-        socket.emit('challenge solved', notification)
-      })
+  server.listen(process.env.PORT || config.get('server.port'), () => {
+    console.log()
+    console.log(colors.green('Server listening on port %d'), config.get('server.port'))
+    console.log()
+    require('./lib/startup/registerWebsocketEvents')(server)
+    if (readyCallback) {
+      readyCallback()
+    }
+  })
 
-      socket.on('notification received', data => {
-        const i = notifications.findIndex(element => element.flag === data)
-        if (i > -1) {
-          notifications.splice(i, 1)
-        }
-      })
-    })
-  }
-
-  function populateIndexTemplate () {
-    fs.copy('app/index.template.html', 'app/index.html', { overwrite: true }, () => {
-      if (config.get('application.logo')) {
-        let logo = config.get('application.logo')
-        if (utils.startsWith(logo, 'http')) {
-          const logoPath = logo
-          logo = decodeURIComponent(logo.substring(logo.lastIndexOf('/') + 1))
-          utils.downloadToFile(logoPath, 'app/public/images/' + logo)
-        }
-        const logoImageTag = '<img class="navbar-brand navbar-logo" src="/public/images/' + logo + '">'
-        replace({
-          regex: /<img class="navbar-brand navbar-logo"(.*?)>/,
-          replacement: logoImageTag,
-          paths: ['app/index.html'],
-          recursive: false,
-          silent: true
-        })
-      }
-      if (config.get('application.theme')) {
-        const themeCss = 'bower_components/bootswatch/' + config.get('application.theme') + '/bootstrap.min.css'
-        replace({
-          regex: /bower_components\/bootswatch\/.*\/bootstrap\.min\.css/,
-          replacement: themeCss,
-          paths: ['app/index.html'],
-          recursive: false,
-          silent: true
-        })
-      }
-    })
-  }
-
-  if (!this.server) {
-    models.sequelize.drop()
-    models.sequelize.sync().success(function () {
-      datacreator()
-      this.server = server.listen(process.env.PORT || config.get('server.port'), () => {
-        console.log(colors.yellow('Server listening on port %d'), config.get('server.port'))
-        registerWebsocketEvents()
-        if (readyCallback) {
-          readyCallback()
-        }
-      })
-    })
-    populateIndexTemplate()
-  }
+  require('./lib/startup/customizeApplication')()
+  require('./lib/startup/customizeEasterEgg')()
 }
 
 exports.close = function (exitCode) {
-  if (this.server) {
-    this.server.close(exitCode)
+  if (server) {
+    server.close(exitCode)
   } else {
     process.exit(exitCode)
   }

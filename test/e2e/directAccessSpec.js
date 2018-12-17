@@ -14,7 +14,7 @@ describe('/', () => {
       browser.driver.get(browser.baseUrl + '/the/devs/are/so/funny/they/hid/an/easter/egg/within/the/easter/egg')
     })
 
-    protractor.expect.challengeSolved({challenge: 'Easter Egg Tier 2'})
+    protractor.expect.challengeSolved({ challenge: 'Easter Egg Tier 2' })
   })
 
   describe('challenge "premiumPaywall"', () => {
@@ -22,36 +22,38 @@ describe('/', () => {
       browser.driver.get(browser.baseUrl + '/this/page/is/hidden/behind/an/incredibly/high/paywall/that/could/only/be/unlocked/by/sending/1btc/to/us')
     })
 
-    protractor.expect.challengeSolved({challenge: 'Premium Paywall'})
-  })
-
-  describe('challenge "geocitiesTheme"', () => {
-    it('should be possible to change the CSS theme to geo-bootstrap', () => {
-      browser.ignoreSynchronization = true
-      browser.executeScript('document.getElementById("theme").setAttribute("href", "css/geo-bootstrap/swatch/bootstrap.css");')
-      browser.driver.sleep(2000)
-
-      browser.get('/#/search')
-      browser.driver.sleep(1000)
-      browser.ignoreSynchronization = false
-    })
-
-    protractor.expect.challengeSolved({challenge: 'Eye Candy'})
+    protractor.expect.challengeSolved({ challenge: 'Premium Paywall' })
   })
 
   describe('challenge "extraLanguage"', () => {
     it('should be able to access the Klingon translation file', () => {
-      browser.driver.get(browser.baseUrl + '/i18n/tlh.json')
+      browser.driver.get(browser.baseUrl + '/assets/i18n/tlh_AA.json')
     })
 
-    protractor.expect.challengeSolved({challenge: 'Extra Language'})
+    protractor.expect.challengeSolved({ challenge: 'Extra Language' })
   })
 
   describe('challenge "retrieveBlueprint"', () => {
     it('should be able to access the blueprint file', () => {
-      browser.driver.get(browser.baseUrl + '/public/images/products/' + blueprint || 'JuiceShop.stl') // TODO remove this workaround default before v5.0 release
+      browser.driver.get(browser.baseUrl + '/assets/public/images/products/' + blueprint)
     })
 
-    protractor.expect.challengeSolved({challenge: 'Retrieve Blueprint'})
+    protractor.expect.challengeSolved({ challenge: 'Retrieve Blueprint' })
+  })
+
+  describe('challenge "securityPolicy"', () => {
+    it('should be able to access the security.txt file', () => {
+      browser.driver.get(browser.baseUrl + '/security.txt')
+    })
+
+    protractor.expect.challengeSolved({ challenge: 'Security Policy' })
+  })
+
+  describe('challenge "emailLeak"', () => {
+    it('should be able to request the callback on /rest/user/whoami', () => {
+      browser.driver.get(browser.baseUrl + '/rest/user/whoami?callback=func')
+    })
+
+    protractor.expect.challengeSolved({ challenge: 'Email Leak' })
   })
 })
